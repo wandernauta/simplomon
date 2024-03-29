@@ -1,3 +1,4 @@
+#include <csignal>
 #include "fmt/format.h"
 #include "fmt/ranges.h"
 #include <map>
@@ -20,6 +21,7 @@ vector<std::shared_ptr<Notifier>> g_notifiers;
 std::optional<bool> g_haveIPv6;
 std::unique_ptr<SQLiteWriter> g_sqlw;
 
+static volatile sig_atomic_t stopRequested;
 
 /* the idea
    Every checker can generate multiple alerts.
@@ -83,6 +85,27 @@ set<pair<Checker*, std::string>> CheckResultFilter::getFilteredResults()
   return ret;
 }
 
+static void handleSignal(int sig)
+{
+  if (sig == SIGTERM)
+    stopRequested = true;
+}
+
+static void setSigtermHandler()
+{
+  struct sigaction sa = {};
+  sa.sa_handler = handleSignal;
+  sigaction(SIGTERM, &sa, nullptr);
+}
+
+static void maskSigterm(int how)
+{
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, SIGTERM);
+  pthread_sigmask(how, &set, nullptr);
+}
+
 int main(int argc, char **argv)
 try
 {
@@ -138,9 +161,11 @@ try
   
   CheckResultFilter crf(300);
   auto prevFiltered = crf.getFilteredResults(); // should be none
-  
+
+  setSigtermHandler();
+
   int numWorkers = 8;
-  for(;;) {
+  while(!stopRequested) {
     time_t startRun = time(nullptr);
     
     auto doCheck = [&](std::unique_ptr<Checker>& c) {
@@ -203,10 +228,14 @@ try
         doCheck(g_checkers.at(n));
     };
 
+    maskSigterm(SIG_BLOCK);
+
     vector<thread> workers;
     for(int n=0; n < numWorkers; ++n)  // number of threads
       workers.emplace_back(worker);
-    
+
+    maskSigterm(SIG_UNBLOCK);
+
     for(auto& w : workers)
       w.join();
 
@@ -238,19 +267,21 @@ try
 
     giveToWebService(filtered, webNotifier->getTimes()); 
     updateWebService();
-    
-    time_t passed = time(nullptr) - startRun;
-    int interval = 60;
-    if(passed < interval) {
-      int sleeptime = interval - passed;
-      fmt::print(", sleeping {} seconds\n", sleeptime);
-      sleep(sleeptime);
-    }
-    else {
-      fmt::print(", did not meet our interval of {} seconds with {} workers, possibly raising\n",
-                 interval, numWorkers);
-      if(numWorkers < 16) 
-        numWorkers++;
+
+    if (!stopRequested) {
+      time_t passed = time(nullptr) - startRun;
+      int interval = 60;
+      if(passed < interval) {
+        int sleeptime = interval - passed;
+        fmt::print(", sleeping {} seconds\n", sleeptime);
+        sleep(sleeptime);
+      }
+      else {
+        fmt::print(", did not meet our interval of {} seconds with {} workers, possibly raising\n",
+                   interval, numWorkers);
+        if(numWorkers < 16)
+          numWorkers++;
+      }
     }
   }
 }
