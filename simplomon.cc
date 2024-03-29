@@ -268,20 +268,21 @@ try
     giveToWebService(filtered, webNotifier->getTimes()); 
     updateWebService();
 
-    if (!stopRequested) {
-      time_t passed = time(nullptr) - startRun;
-      int interval = 60;
-      if(passed < interval) {
-        int sleeptime = interval - passed;
-        fmt::print(", sleeping {} seconds\n", sleeptime);
-        sleep(sleeptime);
-      }
-      else {
-        fmt::print(", did not meet our interval of {} seconds with {} workers, possibly raising\n",
-                   interval, numWorkers);
-        if(numWorkers < 16)
-          numWorkers++;
-      }
+    if (stopRequested)
+      break;
+
+    time_t passed = time(nullptr) - startRun;
+    int interval = 60;
+    if(passed < interval) {
+      int sleeptime = interval - passed;
+      fmt::print(", sleeping {} seconds\n", sleeptime);
+      sleep(sleeptime);
+    }
+    else {
+      fmt::print(", did not meet our interval of {} seconds with {} workers, possibly raising\n",
+                 interval, numWorkers);
+      if(numWorkers < 16)
+        numWorkers++;
     }
   }
 
