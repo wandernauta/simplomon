@@ -41,6 +41,11 @@ void MiniCurl::init()
   }
 }
 
+void MiniCurl::cleanup()
+{
+  curl_global_cleanup();
+}
+
 MiniCurl::MiniCurl(const string& useragent)
 {
   d_curl = curl_easy_init();

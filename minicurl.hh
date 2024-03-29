@@ -38,6 +38,7 @@ public:
   using MiniCurlHeaders = std::map<std::string, std::string>;
 
   static void init();
+  static void cleanup();
 
   MiniCurl(const string& useragent="MiniCurl/0.0");
   ~MiniCurl();

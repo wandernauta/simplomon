@@ -109,6 +109,7 @@ static void maskSigterm(int how)
 int main(int argc, char **argv)
 try
 {
+  MiniCurl::init();
   initLua();
   g_notifiers.emplace_back(make_shared<SQLiteWriterNotifier>());
   auto webNotifier = make_shared<InternalWebNotifier>();
@@ -286,6 +287,7 @@ try
     }
   }
 
+  MiniCurl::cleanup();
   stopWebService();
 }
 catch(std::exception& e)
