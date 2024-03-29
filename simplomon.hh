@@ -293,13 +293,13 @@ private:
 extern std::vector<std::unique_ptr<Checker>> g_checkers;
 extern std::unique_ptr<SQLiteWriter> g_sqlw;
 extern std::optional<bool> g_haveIPv6;
-extern bool g_web;
 
 void checkLuaTable(sol::table data,
                    const std::set<std::string>& mandatory,
                    const std::set<std::string>& opt = std::set<std::string>());
 
 void startWebService(sol::table data);
+void stopWebService();
 void giveToWebService(const std::set<pair<Checker*, std::string>>&,
                       const std::map<std::string, time_t>& startAlerts);
 void updateWebService();

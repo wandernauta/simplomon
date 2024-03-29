@@ -76,10 +76,13 @@ void updateWebService()
   }
 }
 
-static void webserverThread(std::unique_ptr<httplib::Server> svr, string addr)
+static std::unique_ptr<httplib::Server> g_svr;
+static std::thread g_thread;
+
+static void webserverThread(httplib::Server* svr, string addr)
 {
   ComboAddress ca(addr, 8080);
-  if(svr->listen(ca.toString(), ntohs(ca.sin4.sin_port))) {
+  if(!svr->listen(ca.toString(), ntohs(ca.sin4.sin_port))) {
     cout<<"Error launching server: "<<strerror(errno)<<endl;
     exit(EXIT_FAILURE);
   }
@@ -166,6 +169,9 @@ static bool checkAuth(const httplib::Request& req, httplib::Response &res)
 
 void startWebService(sol::table data)
 {
+  if (g_svr)
+    throw std::runtime_error("Webserver is already started");
+
   checkLuaTable(data, {"address"}, { "password", "user"});
   auto svr = make_unique<httplib::Server>();
   g_webpassword = data["password"];
@@ -200,8 +206,18 @@ void startWebService(sol::table data)
 
   svr->set_mount_point("/", "./html");  
 
-  
-  std::thread t(webserverThread, std::move(svr), data.get_or("address", string("0.0.0.0:8080")));
-  t.detach();
+  g_svr.swap(svr);
+  g_thread = std::thread(webserverThread, g_svr.get(), data.get_or("address", string("0.0.0.0:8080")));
+}
+
+void stopWebService() {
+  if (g_svr) {
+    g_svr->wait_until_ready();
+    g_svr->stop();
+  }
+  if (g_thread.joinable()) {
+    g_thread.join();
+  }
+  g_svr.reset();
 }
 

@@ -154,12 +154,7 @@ void initLua()
     g_haveIPv6 = ipv6;
   });
   
-  g_lua.set_function("Webserver", [&](sol::table data) {
-    if (g_web)
-      throw std::runtime_error("At most one call to Webserver is expected");
-    startWebService(data);
-    g_web = true;
-  });
+  g_lua.set_function("Webserver", startWebService);
 
   // Telegram notifier
   g_lua.set_function("addTelegramNotifier", [&](sol::table data) {
