@@ -5,6 +5,9 @@
 
 #include "simplomon.hh"
 
+#include <unistd.h>
+#include <sys/wait.h>
+
 PushoverNotifier::PushoverNotifier(sol::table data) : Notifier(data)
 {
   checkLuaTable(data, {"user", "apikey"});
@@ -73,14 +76,15 @@ static uint64_t getRandom64()
   return ((uint64_t)rd() << 32) | rd();
 }
 
+static inline void checkEmailAddress(const std::string& address)
+{
+  const char* allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_+-.@";
+  if(address.find_first_not_of(allowed) != string::npos)
+    throw std::runtime_error("Illegal character in email address");
+}
 
 static void sendAsciiEmailAsync(const std::string& server, const std::string& from, const std::string& to, const std::string& subject, const std::string& textBody)
 {
-  const char* allowed="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_+-.@";
-  if(from.find_first_not_of(allowed) != string::npos || to.find_first_not_of(allowed) != string::npos) {
-    throw std::runtime_error("Illegal character in from or to address");
-  }
-
   ComboAddress mailserver(server, 25);
   Socket s(mailserver.sin4.sin_family, SOCK_STREAM);
 
@@ -139,7 +143,9 @@ EmailNotifier::EmailNotifier(sol::table data) : Notifier(data)
 {
   checkLuaTable(data, {"from", "to", "server"});
   d_from = data.get<string>("from");
+  checkEmailAddress(d_from);
   d_to = data.get<string>("to");
+  checkEmailAddress(d_to);
   d_server = ComboAddress(data.get<string>("server"), 25);
   d_notifierName="Email";
 }
@@ -152,6 +158,37 @@ void EmailNotifier::alert(const std::string& textBody)
                       d_to,
                       "Simplomon notification",
                       textBody);
+}
+
+SendmailNotifier::SendmailNotifier(sol::table data) : Notifier(data)
+{
+  checkLuaTable(data, {"from", "to"});
+  d_from = data.get<string>("from");
+  checkEmailAddress(d_from);
+  d_to = data.get<string>("to");
+  checkEmailAddress(d_to);
+  d_notifierName = "Sendmail";
+}
+
+void SendmailNotifier::alert(const std::string& message)
+{
+  errno = 0;
+  FILE* sendmail = popen("sendmail -t", "w");
+  if(!sendmail)
+    throw std::runtime_error(fmt::format("Could not fork for sendmail: {}", strerror(errno)));
+
+  try {
+    fmt::println(sendmail, "From: {}", d_from);
+    fmt::println(sendmail, "To: {}", d_to);
+    fmt::println(sendmail, "Subject: {}", "Simplomon notification");
+    fmt::println(sendmail, "");
+    fmt::println(sendmail, "{}", message);
+  } catch (const std::system_error &e) {
+    // If this failed, the pclose below (which still needs to be called) will fail as well
+  }
+
+  if(pclose(sendmail) != 0)
+    throw std::runtime_error("Failed to execute sendmail (exit status nonzero)");
 }
 
 void Notifier::bulkAlert(const std::string& textBody)

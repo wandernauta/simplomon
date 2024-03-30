@@ -135,6 +135,13 @@ void initLua()
     return make_shared<EmailNotifier>(data);
   });
 
+  g_lua.set_function("addSendmailNotifier", [&](sol::table data) {
+    return g_notifiers.emplace_back(make_shared<SendmailNotifier>(data));
+  });
+  g_lua.set_function("createSendmailNotifier", [&](sol::table data) {
+    return make_shared<SendmailNotifier>(data);
+  });
+
   g_lua.set_function("setNotifiers", [&](vector<shared_ptr<Notifier>> notifs) {
     g_notifiers.resize(2); // need to keep the system notifiers
     

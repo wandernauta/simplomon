@@ -92,6 +92,16 @@ private:
   ComboAddress d_server;
 };
 
+class SendmailNotifier : public Notifier
+{
+public:
+  explicit SendmailNotifier(sol::table data);
+  void alert(const std::string& message) override;
+private:
+  std::string d_from;
+  std::string d_to;
+};
+
 class TelegramNotifier : public Notifier
 {
 public:
